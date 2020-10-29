@@ -1,19 +1,29 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
+	"github.com/gorhill/cronexpr"
 	"github.com/mattermost/mattermost-server/v5/model"
 	"github.com/mattermost/mattermost-server/v5/plugin"
 )
 
 type Queue struct {
-	Name      string
-	Spec      string
-	ChannelId string
-	Messages  []string
+	Name       string               `json:"name"`
+	SpecSource string               `json:"spec_source"`
+	Spec       *cronexpr.Expression `json:"-"`
+	UserId     string               `json:"user_id"`
+	ChannelId  string               `json:"channel_id"`
+	Messages   []string             `json:"messages"`
+}
+
+type DeferedPost struct {
+	Time time.Time   `json:"time"`
+	Post *model.Post `json:"post"`
 }
 
 // Plugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.
@@ -28,6 +38,7 @@ type Plugin struct {
 	configuration *configuration
 
 	postsWaitingForOnline map[string][]*model.Post
+	deferedPosts          []*DeferedPost
 	Queues                map[string]*Queue
 }
 
@@ -45,8 +56,18 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Req
 }
 
 func (p *Plugin) OnActivate() error {
-	p.postsWaitingForOnline = map[string][]*model.Post{}
-	p.Queues = map[string]*Queue{}
+	err := p.RestoreWaitingForOnlinePosts()
+	if err != nil {
+		p.API.LogError(err.Error())
+	}
+	err = p.RestoreDeferedPosts()
+	if err != nil {
+		p.API.LogError(err.Error())
+	}
+	err = p.RestoreQueues()
+	if err != nil {
+		p.API.LogError(err.Error())
+	}
 	if err := p.API.RegisterCommand(createDeferCommand()); err != nil {
 		return err
 	}
@@ -56,4 +77,113 @@ func (p *Plugin) OnActivate() error {
 	return nil
 }
 
-// See https://developers.mattermost.com/extend/plugins/server/reference/
+func (p *Plugin) SaveQueues() error {
+	data, err := json.Marshal(p.Queues)
+	if err != nil {
+		return err
+	}
+	p.API.KVSet("queues", data)
+	return nil
+}
+
+func (p *Plugin) RestoreQueues() error {
+	p.Queues = map[string]*Queue{}
+	data, appErr := p.API.KVGet("queues")
+	if appErr != nil {
+		return appErr
+	}
+	err := json.Unmarshal(data, &p.Queues)
+	if err != nil {
+		p.Queues = map[string]*Queue{}
+		return err
+	}
+	for _, queue := range p.Queues {
+		scheduleSpec, nErr := cronexpr.Parse(queue.SpecSource)
+		if nErr != nil {
+			p.API.LogError(nErr.Error())
+		}
+		queue.Spec = scheduleSpec
+
+		var handleTimeout func()
+		handleTimeout = func() {
+			if len(queue.Messages) > 0 {
+				_, err := p.API.CreatePost(&model.Post{
+					UserId:    queue.UserId,
+					ChannelId: queue.ChannelId,
+					Message:   queue.Messages[0],
+				})
+				if err != nil {
+					p.API.LogError(err.Error())
+				}
+				queue.Messages = queue.Messages[1:]
+				nErr := p.SaveQueues()
+				if nErr != nil {
+					p.API.LogError(nErr.Error())
+				}
+			}
+			model.CreateTask(fmt.Sprintf("check queue %s", queue.Name), handleTimeout, queue.Spec.Next(time.Now()).Sub(time.Now()))
+		}
+
+		model.CreateTask(fmt.Sprintf("check queue %s", queue.Name), handleTimeout, queue.Spec.Next(time.Now()).Sub(time.Now()))
+	}
+	return nil
+}
+
+func (p *Plugin) SaveDeferedPosts() error {
+	data, err := json.Marshal(p.deferedPosts)
+	if err != nil {
+		return err
+	}
+	p.API.KVSet("defered-posts", data)
+	return nil
+}
+
+func (p *Plugin) RestoreDeferedPosts() error {
+	p.deferedPosts = []*DeferedPost{}
+	data, appErr := p.API.KVGet("defered-posts")
+	if appErr != nil {
+		return appErr
+	}
+	err := json.Unmarshal(data, &p.deferedPosts)
+	if err != nil {
+		p.deferedPosts = []*DeferedPost{}
+		return err
+	}
+	finalDeferedPosts := []*DeferedPost{}
+	for _, deferedPost := range p.deferedPosts {
+		if deferedPost.Time.Before(time.Now()) {
+			_, err := p.API.CreatePost(deferedPost.Post)
+			if err != nil {
+				p.API.LogError(err.Error())
+			}
+
+		} else {
+			finalDeferedPosts = append(finalDeferedPosts, deferedPost)
+		}
+	}
+	p.deferedPosts = finalDeferedPosts
+	return nil
+}
+
+func (p *Plugin) SaveWaitingForOnlinePosts() error {
+	data, err := json.Marshal(p.postsWaitingForOnline)
+	if err != nil {
+		return err
+	}
+	p.API.KVSet("waiting-for-online", data)
+	return nil
+}
+
+func (p *Plugin) RestoreWaitingForOnlinePosts() error {
+	p.postsWaitingForOnline = map[string][]*model.Post{}
+	data, appErr := p.API.KVGet("waiting-for-online")
+	if appErr != nil {
+		return appErr
+	}
+	err := json.Unmarshal(data, &p.postsWaitingForOnline)
+	if err != nil {
+		p.deferedPosts = []*DeferedPost{}
+		return err
+	}
+	return nil
+}

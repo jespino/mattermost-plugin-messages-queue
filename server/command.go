@@ -81,11 +81,44 @@ func (p *Plugin) executeQueueCommand(c *plugin.Context, args *model.CommandArgs)
 			return &model.CommandResponse{}, nil
 		}
 		p.Queues[split[2]] = &Queue{
-			Name:      split[2],
-			Spec:      strings.Join(split[3:], " "),
-			ChannelId: args.ChannelId,
-			Messages:  []string{},
+			Name:       split[2],
+			UserId:     args.UserId,
+			SpecSource: strings.Join(split[3:], " "),
+			Spec:       scheduleSpec,
+			ChannelId:  args.ChannelId,
+			Messages:   []string{},
 		}
+		nErr := p.SaveQueues()
+		if nErr != nil {
+			p.API.LogError(nErr.Error())
+		}
+
+		var handleTimeout func()
+		handleTimeout = func() {
+			queue, ok := p.Queues[split[2]]
+			if !ok {
+				return
+			}
+			if len(queue.Messages) > 0 {
+				_, err := p.API.CreatePost(&model.Post{
+					UserId:    queue.UserId,
+					ChannelId: queue.ChannelId,
+					Message:   queue.Messages[0],
+				})
+				if err != nil {
+					p.API.LogError(err.Error())
+				}
+				queue.Messages = queue.Messages[1:]
+				nErr := p.SaveQueues()
+				if nErr != nil {
+					p.API.LogError(nErr.Error())
+				}
+			}
+			model.CreateTask(fmt.Sprintf("check queue %s", split[2]), handleTimeout, queue.Spec.Next(time.Now()).Sub(time.Now()))
+		}
+
+		model.CreateTask(fmt.Sprintf("check queue %s", split[2]), handleTimeout, scheduleSpec.Next(time.Now()).Sub(time.Now()))
+
 		_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
 			ChannelId: args.ChannelId,
 			Message:   fmt.Sprintf("Scheduling a queue, next execution: %v", scheduleSpec.Next(time.Now())),
@@ -108,13 +141,8 @@ func (p *Plugin) executeQueueCommand(c *plugin.Context, args *model.CommandArgs)
 			if len(queue.Messages) > 0 {
 				nextMessage = queue.Messages[0]
 			}
-			nextTime := "not able to get the time spec properly"
-			scheduleSpec, err := cronexpr.Parse(queue.Spec)
-			if err == nil {
-				nextTime = fmt.Sprintf("%v", scheduleSpec.Next(time.Now()))
-			}
 			queuesList = append(queuesList, fmt.Sprintf(" * %s\n  * channel id: %s\n  * schedule spec: %s\n  * next execution: %s\n  * next message: %s",
-				queue.Name, queue.ChannelId, queue.Spec, nextTime, nextMessage,
+				queue.Name, queue.ChannelId, queue.SpecSource, queue.Spec.Next(time.Now()), nextMessage,
 			))
 		}
 
@@ -147,6 +175,10 @@ func (p *Plugin) executeQueueCommand(c *plugin.Context, args *model.CommandArgs)
 			return &model.CommandResponse{}, nil
 		}
 		queue.Messages = append(queue.Messages, strings.Join(split[3:], " "))
+		nErr := p.SaveQueues()
+		if nErr != nil {
+			p.API.LogError(nErr.Error())
+		}
 		_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
 			ChannelId: args.ChannelId,
 			Message:   "Message added to the queue",
