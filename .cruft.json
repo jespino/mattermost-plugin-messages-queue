@@ -1,0 +1,16 @@
+{
+    "template": "git@github.com:jespino/cookiecutter-mattermost-plugin.git",
+    "commit": "3f02379a4641a36da92e520b0437afede21e5829",
+    "context": {
+        "cookiecutter": {
+            "project_dir": "mattermost-plugin-messages-queue",
+            "id": "com.github.jespino.messages-queue",
+            "name": "Messages Queue",
+            "description": "Enqueue messages to be send at cetain time",
+            "frontend_language": "javascript",
+            "webapp": "false",
+            "server": "true",
+            "_template": "git@github.com:jespino/cookiecutter-mattermost-plugin.git"
+        }
+    }
+}
