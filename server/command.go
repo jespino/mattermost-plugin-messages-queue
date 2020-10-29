@@ -158,6 +158,43 @@ func (p *Plugin) executeQueueCommand(c *plugin.Context, args *model.CommandArgs)
 		return &model.CommandResponse{}, nil
 	}
 
+	if split[1] == "delete" {
+		if len(split) < 3 {
+			_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+				ChannelId: args.ChannelId,
+				Message:   "Not enough arguments to delete queue",
+			})
+			return &model.CommandResponse{}, nil
+		}
+		if len(p.Queues) == 0 {
+			_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+				ChannelId: args.ChannelId,
+				Message:   fmt.Sprintf("Queue %s doesn't exists", split[2]),
+			})
+			return &model.CommandResponse{}, nil
+		}
+
+		_, ok := p.Queues[split[2]]
+		if !ok {
+			_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+				ChannelId: args.ChannelId,
+				Message:   fmt.Sprintf("Queue %s doesn't exists", split[2]),
+			})
+			return &model.CommandResponse{}, nil
+		}
+		delete(p.Queues, split[2])
+		nErr := p.SaveQueues()
+		if nErr != nil {
+			p.API.LogError(nErr.Error())
+		}
+
+		_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+			ChannelId: args.ChannelId,
+			Message:   fmt.Sprintf("Queue %s deleted", split[2]),
+		})
+		return &model.CommandResponse{}, nil
+	}
+
 	if split[1] == "add-message" {
 		if len(split) < 4 {
 			_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
@@ -280,6 +317,7 @@ func (p *Plugin) executeDeferCommand(c *plugin.Context, args *model.CommandArgs)
 			ParentId:  args.ParentId,
 			Message:   message,
 		})
+		p.SaveWaitingForOnlinePosts()
 		fmt.Println(p.postsWaitingForOnline)
 		return &model.CommandResponse{
 			ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
@@ -300,14 +338,17 @@ func (p *Plugin) executeDeferCommand(c *plugin.Context, args *model.CommandArgs)
 			}
 	}
 
+	deferedPost := model.Post{
+		UserId:    args.UserId,
+		ChannelId: args.ChannelId,
+		RootId:    args.RootId,
+		ParentId:  args.ParentId,
+		Message:   message,
+	}
+	p.deferedPosts = append(p.deferedPosts, &DeferedPost{Time: time.Now().Add(duration), Post: &deferedPost})
+	p.SaveDeferedPosts()
 	model.CreateTask("defer message", func() {
-		_, err := p.API.CreatePost(&model.Post{
-			UserId:    args.UserId,
-			ChannelId: args.ChannelId,
-			RootId:    args.RootId,
-			ParentId:  args.ParentId,
-			Message:   message,
-		})
+		_, err := p.API.CreatePost(&deferedPost)
 		if err != nil {
 			p.API.LogError(err.Error())
 		}
@@ -343,7 +384,8 @@ func (p *Plugin) executeQueueHelpCommand(c *plugin.Context, args *model.CommandA
 	helpTitle := `###### Defer Post - Slash Command help
 `
 	commandHelp := `* |/messages-queue create <name> <schedule>| - Create a queue for the current channel (see the Schedule format help at the bottom)
-* |/messages-queue list| - List the queues for this chanell
+* |/messages-queue list| - List the queues for this channel
+* |/messages-queue delete <queue-name>| - Delete a queue.
 * |/messages-queue add-message <queue-name> <message>| - Add a new message to the queue
 * |/messages-queue list-messages <queue-name>| - Add a new message the the queue
 * |/messages-queue remove-message <queue-name> <position>| - Remove a message from the queue in the specified position
