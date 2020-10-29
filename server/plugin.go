@@ -9,6 +9,13 @@ import (
 	"github.com/mattermost/mattermost-server/v5/plugin"
 )
 
+type Queue struct {
+	Name      string
+	Spec      string
+	ChannelId string
+	Messages  []string
+}
+
 // Plugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.
 type Plugin struct {
 	plugin.MattermostPlugin
@@ -21,6 +28,7 @@ type Plugin struct {
 	configuration *configuration
 
 	postsWaitingForOnline map[string][]*model.Post
+	Queues                map[string]*Queue
 }
 
 // ServeHTTP demonstrates a plugin that handles HTTP requests by greeting the world.
@@ -38,6 +46,7 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Req
 
 func (p *Plugin) OnActivate() error {
 	p.postsWaitingForOnline = map[string][]*model.Post{}
+	p.Queues = map[string]*Queue{}
 	if err := p.API.RegisterCommand(createDeferCommand()); err != nil {
 		return err
 	}
