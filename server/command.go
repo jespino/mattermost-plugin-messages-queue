@@ -32,6 +32,7 @@ func createDeferCommand() *model.Command {
 		AutoComplete:     true,
 		AutoCompleteDesc: "Defer a message to be sent later.",
 		AutoCompleteHint: "[command]",
+		AutocompleteData: getDeferAutocompleteData(),
 	}
 }
 
@@ -41,7 +42,52 @@ func createQueueCommand() *model.Command {
 		AutoComplete:     true,
 		AutoCompleteDesc: "Manage messages queues. Create/Delete/Modify queues, and add messages to the queue.",
 		AutoCompleteHint: "[command]",
+		AutocompleteData: getQueueAutocompleteData(),
 	}
+}
+
+func getQueueAutocompleteData() *model.AutocompleteData {
+	queue := model.NewAutocompleteData("messages-queue", "[command]", "Defer a post message to some time later")
+
+	// * |/messages-queue remove-message <queue-name> <position>| - Remove a message from the queue in the specified position
+	// * |/messages-queue insert-message <queue-name> <position> <message>| - Add a new message to the queue in the speicified position
+
+	create := model.NewAutocompleteData("create", "[queue-name] [schedule]", "Create a new queue")
+	create.AddTextArgument("Name of the new queue", "[queue-name]", "")
+	create.AddTextArgument("Schedule in cron format", "[schedule]", "")
+	queue.AddCommand(create)
+
+	deleteQueue := model.NewAutocompleteData("delete", "[queue-name]", "Delete a queue")
+	deleteQueue.AddTextArgument("Name of the queue", "[queue-name]", "")
+	queue.AddCommand(deleteQueue)
+
+	list := model.NewAutocompleteData("list", "", "List queues")
+	queue.AddCommand(list)
+
+	listQueue := model.NewAutocompleteData("list-messages", "[queue-name]", "List pending messages in a queue")
+	listQueue.AddTextArgument("Name of the queue", "[queue-name]", "")
+	queue.AddCommand(listQueue)
+
+	add := model.NewAutocompleteData("add-message", "[queue-name] [message]", "Add a message to the queue")
+	add.AddTextArgument("Name of the new queue", "[queue-name]", "")
+	add.AddTextArgument("Message to add to the queue", "[message]", "")
+	queue.AddCommand(add)
+
+	help := model.NewAutocompleteData("help", "", "Get slash command help")
+	queue.AddCommand(help)
+	return queue
+}
+
+func getDeferAutocompleteData() *model.AutocompleteData {
+	deferPost := model.NewAutocompleteData("defer-post", "[online|time] [message]", "Defer a post message to some time later")
+
+	online := model.NewAutocompleteData("online", "[message]", "Send the message when the user is online (only valid for DMs)")
+	online.AddTextArgument("Message to send", "[message]", "")
+	deferPost.AddCommand(online)
+
+	help := model.NewAutocompleteData("help", "", "Get slash command help")
+	deferPost.AddCommand(help)
+	return deferPost
 }
 
 func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
