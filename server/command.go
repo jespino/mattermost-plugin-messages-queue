@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -73,6 +74,17 @@ func getQueueAutocompleteData() *model.AutocompleteData {
 	add.AddTextArgument("Message to add to the queue", "[message]", "")
 	queue.AddCommand(add)
 
+	remove := model.NewAutocompleteData("remove-message", "[queue-name] [position] [message]", "Remove a message from the queue")
+	remove.AddTextArgument("Name of the new queue", "[queue-name]", "")
+	remove.AddTextArgument("Position of the message", "[position]", "")
+	queue.AddCommand(remove)
+
+	insert := model.NewAutocompleteData("insert-message", "[queue-name] [position] [message]", "Insert a message in a position in the queue")
+	insert.AddTextArgument("Name of the new queue", "[queue-name]", "")
+	remove.AddTextArgument("Position of the message", "[position]", "")
+	insert.AddTextArgument("Message to insert in the queue", "[message]", "")
+	queue.AddCommand(insert)
+
 	help := model.NewAutocompleteData("help", "", "Get slash command help")
 	queue.AddCommand(help)
 	return queue
@@ -108,6 +120,14 @@ func (p *Plugin) executeQueueCommand(c *plugin.Context, args *model.CommandArgs)
 	split := strings.Fields(args.Command)
 	if (len(split) == 2 && split[1] == "help") || len(split) == 1 {
 		return p.executeQueueHelpCommand(c, args)
+	}
+
+	if !p.API.HasPermissionTo(args.UserId, model.PERMISSION_MANAGE_SYSTEM) {
+		_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+			ChannelId: args.ChannelId,
+			Message:   "Permission denied, only system admins can handle messages queues",
+		})
+		return &model.CommandResponse{}, nil
 	}
 
 	if split[1] == "create" {
@@ -269,6 +289,85 @@ func (p *Plugin) executeQueueCommand(c *plugin.Context, args *model.CommandArgs)
 		return &model.CommandResponse{}, nil
 	}
 
+	if split[1] == "remove-message" {
+		if len(split) < 4 {
+			_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+				ChannelId: args.ChannelId,
+				Message:   "Not enough arguments to remove a message",
+			})
+			return &model.CommandResponse{}, nil
+		}
+		queue, ok := p.Queues[split[2]]
+		if !ok {
+			_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+				ChannelId: args.ChannelId,
+				Message:   fmt.Sprintf("Unknown queue %s.", split[2]),
+			})
+			return &model.CommandResponse{}, nil
+		}
+		idx, err := strconv.ParseUint(split[3], 10, 32)
+		if err != nil {
+			_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+				ChannelId: args.ChannelId,
+				Message:   "Invalid position, please see the list-messages command result.",
+			})
+			return &model.CommandResponse{}, nil
+		}
+		queue.Messages = append(queue.Messages[:idx], queue.Messages[idx+1:]...)
+		nErr := p.SaveQueues()
+		if nErr != nil {
+			p.API.LogError(nErr.Error())
+		}
+		_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+			ChannelId: args.ChannelId,
+			Message:   "Message removed from the queue",
+		})
+		return &model.CommandResponse{}, nil
+	}
+
+	if split[1] == "insert-message" {
+		if len(split) < 5 {
+			_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+				ChannelId: args.ChannelId,
+				Message:   "Not enough arguments to insert a message",
+			})
+			return &model.CommandResponse{}, nil
+		}
+		queue, ok := p.Queues[split[2]]
+		if !ok {
+			_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+				ChannelId: args.ChannelId,
+				Message:   fmt.Sprintf("Unknown queue %s.", split[2]),
+			})
+			return &model.CommandResponse{}, nil
+		}
+		idx, err := strconv.ParseUint(split[3], 10, 32)
+		if err != nil {
+			_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+				ChannelId: args.ChannelId,
+				Message:   "Invalid position, please see the list-messages command result.",
+			})
+			return &model.CommandResponse{}, nil
+		}
+		newMessages := []string{}
+		for i, message := range queue.Messages {
+			if uint64(i) == idx {
+				newMessages = append(newMessages, strings.Join(split[4:], " "))
+			}
+			newMessages = append(newMessages, message)
+		}
+		queue.Messages = newMessages
+		nErr := p.SaveQueues()
+		if nErr != nil {
+			p.API.LogError(nErr.Error())
+		}
+		_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+			ChannelId: args.ChannelId,
+			Message:   "Message inserted in the queue",
+		})
+		return &model.CommandResponse{}, nil
+	}
+
 	if split[1] == "list-messages" {
 		if len(split) < 3 {
 			_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
@@ -287,8 +386,8 @@ func (p *Plugin) executeQueueCommand(c *plugin.Context, args *model.CommandArgs)
 		}
 
 		listOfMessages := []string{fmt.Sprintf("#### List of messages for the queue %s:", queue.Name)}
-		for _, message := range queue.Messages {
-			listOfMessages = append(listOfMessages, fmt.Sprintf(" * %s", message))
+		for id, message := range queue.Messages {
+			listOfMessages = append(listOfMessages, fmt.Sprintf(" * **%d**: %s", id, message))
 		}
 		_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
 			ChannelId: args.ChannelId,
