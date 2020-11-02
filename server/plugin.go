@@ -162,6 +162,7 @@ func (p *Plugin) RestoreDeferedPosts() error {
 		}
 	}
 	p.deferedPosts = finalDeferedPosts
+	p.SaveDeferedPosts()
 	return nil
 }
 
