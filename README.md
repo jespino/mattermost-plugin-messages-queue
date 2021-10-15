@@ -1,88 +1,59 @@
-# Plugin Starter Template [![CircleCI branch](https://img.shields.io/circleci/project/github/mattermost/mattermost-plugin-starter-template/master.svg)](https://circleci.com/gh/mattermost/mattermost-plugin-starter-template)
+# Mattermost Message Queue
 
-This plugin serves as a starting point for writing a Mattermost plugin. Feel free to base your own plugin off this repository.
+This plugin adds async messages delivery based on time or online status of the users throuh `/defer-post` and `/messages-queue` slash commands.
 
-To learn more about plugins, see [our plugin documentation](https://developers.mattermost.com/extend/plugins/).
+## `/defer-post`
 
-## Getting Started
-Use GitHub's template feature to make a copy of this repository by clicking the "Use this template" button.
+The `/defer-post` commands that allows to defer the delivery of a message for certain amount of time, or until the other user is online (in DMs).
 
-Alternatively shallow clone the repository matching your plugin name:
-```
-git clone --depth 1 https://github.com/mattermost/mattermost-plugin-starter-template com.example.my-plugin
-```
+### Available commands
 
-Note that this project uses [Go modules](https://github.com/golang/go/wiki/Modules). Be sure to locate the project outside of `$GOPATH`.
+  * |/defer-post [time] [message]| - Send the message after the time has passed
+  * |/defer-post online [message]| - Send the message when the user is online (only valid for DMs)
 
-Edit `plugin.json` with your `id`, `name`, and `description`:
-```
-{
-    "id": "com.example.my-plugin",
-    "name": "My Plugin",
-    "description": "A plugin to enhance Mattermost."
-}
-```
+### Defer time format
 
-Build your plugin:
-```
-make
-```
+The time can be specified in the golang format that you can see [here](https://golang.org/pkg/time/#ParseDuration).
 
-This will produce a single plugin file (with support for multiple architectures) for upload to your Mattermost server:
+### Examples
 
-```
-dist/com.example.my-plugin.tar.gz
-```
+  * In a DM you can run `/defer-post online please take a lot to this ticket
+    #123`. That will send the message to the user whenever the user is online
+    again, so you don't have to worry about annoy him while he is offline (no
+    message, and no notifications).
+  * In a any channel you can run `/defer-post 2h Starting the deployment`. This
+    will schedule the message to be send in 2 hours.
 
-## Development
+## `/messages-queue`
 
-To avoid having to manually install your plugin, build and deploy your plugin with login credentials:
-```
-export MM_SERVICESETTINGS_SITEURL=http://localhost:8065
-export MM_ADMIN_USERNAME=admin
-export MM_ADMIN_PASSWORD=password
-make deploy
-```
+The `/messages-queue` commands allows you to create and maintain messages
+queues that are send base on a schedule.
 
-or with a [personal access token](https://docs.mattermost.com/developer/personal-access-tokens.html):
-```
-export MM_SERVICESETTINGS_SITEURL=http://localhost:8065
-export MM_ADMIN_TOKEN=j44acwd8obn78cdcx7koid4jkr
-make deploy
-```
+You can list, add and delete queues, and the messages in it. Every time the
+scheduled message queue is triggered, it sends one message from the queue. So
+if you have a queue with 20 messages, and your schedule is to run it every day,
+is going to take 20 days to send all the messages.
 
-If developing a plugin with a webapp, watch for changes and deploy those automatically:
-```
-export MM_SERVICESETTINGS_SITEURL=http://localhost:8065
-export MM_ADMIN_TOKEN=j44acwd8obn78cdcx7koid4jkr
-make watch
-```
+When the queue is empty, no messsage is sent.
 
-## Q&A
+### Available commands
 
-### How do I make a server-only or web app-only plugin?
+  * |/messages-queue create <name> <schedule>| - Create a queue for the current channel (see the Schedule format help at the bottom)
+  * |/messages-queue list| - List the queues for this channel
+  * |/messages-queue delete <queue-name>| - Delete a queue.
+  * |/messages-queue add-message <queue-name> <message>| - Add a new message to the queue
+  * |/messages-queue list-messages <queue-name>| - Add a new message the the queue
+  * |/messages-queue remove-message <queue-name> <position>| - Remove a message from the queue in the specified position
+  * |/messages-queue insert-message <queue-name> <position> <message>| - Add a new message to the queue in the speicified position
 
-Simply delete the `server` or `webapp` folders and remove the corresponding sections from `plugin.json`. The build scripts will skip the missing portions automatically.
+### Schedule format
 
-### How do I include assets in the plugin bundle?
+The schedule format used is the cron expresion format, you can see more information [here](https://en.wikipedia.org/wiki/Cron)`
 
-Place them into the `assets` directory. To use an asset at runtime, build the path to your asset and open as a regular file:
+### Examples
 
-```go
-bundlePath, err := p.API.GetBundlePath()
-if err != nil {
-    return errors.Wrap(err, "failed to get bundle path")
-}
-
-profileImage, err := ioutil.ReadFile(filepath.Join(bundlePath, "assets", "profile_image.png"))
-if err != nil {
-    return errors.Wrap(err, "failed to read profile image")
-}
-
-if appErr := p.API.SetProfileImage(userID, profileImage); appErr != nil {
-    return errors.Wrap(err, "failed to set profile image")
-}
-```
-
-### How do I build the plugin with unminified JavaScript?
-Use `make dist-debug` and `make deploy-debug` in place of `make dist` and `make deploy` to configure webpack to generate unminified Javascript.
+  * If you want to prepare a set of tips to send them from monday to friday at 10 am to your users you can run:
+    * `/message-queue create tips 0 10 * * 1-5`
+    * `/message-add-message tips remember to take some breaks during the day.`
+    * `/message-add-message tips remember to send your standup summary to the standup channel.`
+    * `/message-add-message tips Do you know you can expense books and learning material? Please do it!`

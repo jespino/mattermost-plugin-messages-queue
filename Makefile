@@ -1,3 +1,8 @@
+MM_SERVER_PATH ?= $(MM_SERVER_PATH:)
+ifeq ($(MM_SERVER_PATH),)
+	MM_SERVER_PATH := ../../mattermost-server
+endif
+
 GO ?= $(shell command -v go 2> /dev/null)
 NPM ?= $(shell command -v npm 2> /dev/null)
 CURL ?= $(shell command -v curl 2> /dev/null)
@@ -8,6 +13,8 @@ GO_TEST_FLAGS ?= -race
 GO_BUILD_FLAGS ?=
 MM_UTILITIES_DIR ?= ../mattermost-utilities
 DLV_DEBUG_PORT := 2346
+MATTERMOST_PLUGINS_PATH=$(MM_SERVER_PATH)/plugins
+INSTALLED_PLUGIN_PATH=$(MATTERMOST_PLUGINS_PATH)/$(PLUGIN_ID)
 
 export GO111MODULE=on
 
@@ -247,6 +254,35 @@ ifneq ($(HAS_WEBAPP),)
 	rm -fr webapp/node_modules
 endif
 	rm -fr build/bin/
+
+## Watch webapp and server changes and redeploy locally using local filesystem (MM_SERVER_PATH)
+.PHONY: live-watch
+live-watch:
+	make -j2 live-watch-server live-watch-webapp
+
+## Watch server changes and redeploy locally using local filesystem (MM_SERVER_PATH)
+.PHONY: live-watch-server
+live-watch-server: apply
+	modd
+
+## Watch webapp changes and redeploy locally using local filesystem (MM_SERVER_PATH)
+.PHONY: live-watch-webapp
+live-watch-webapp: apply
+	cd webapp && $(NPM) run live-watch
+
+.PHONY: deploy-to-mattermost-directory
+deploy-to-mattermost-directory:
+	./build/bin/pluginctl disable $(PLUGIN_ID) || true
+	mkdir -p $(INSTALLED_PLUGIN_PATH)
+	cp $(MANIFEST_FILE) $(INSTALLED_PLUGIN_PATH)/
+	cp -r $(ASSETS_DIR) $(INSTALLED_PLUGIN_PATH)/
+	cp -r public $(INSTALLED_PLUGIN_PATH)/
+	mkdir -p $(INSTALLED_PLUGIN_PATH)/server
+	cp -r server/dist $(INSTALLED_PLUGIN_PATH)/server/
+	mkdir -p $(INSTALLED_PLUGIN_PATH)/webapp
+	cp -r webapp/dist $(INSTALLED_PLUGIN_PATH)/webapp/
+	./build/bin/pluginctl enable $(PLUGIN_ID)
+	@echo plugin built at: $(INSTALLED_PLUGIN_PATH)
 
 # Help documentation à la https://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
 help:

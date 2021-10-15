@@ -16,17 +16,6 @@ import (
 const deferCommand = "defer-post"
 const queueCommand = "messages-queue"
 
-func startMeetingError(channelID string, detailedError string) (*model.CommandResponse, *model.AppError) {
-	return &model.CommandResponse{
-			ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
-			ChannelId:    channelID,
-			Text:         "We could not start a meeting at this time.",
-		}, &model.AppError{
-			Message:       "We could not start a meeting at this time.",
-			DetailedError: detailedError,
-		}
-}
-
 func createDeferCommand() *model.Command {
 	return &model.Command{
 		Trigger:          deferCommand,
@@ -526,7 +515,7 @@ func (p *Plugin) executeDeferHelpCommand(c *plugin.Context, args *model.CommandA
 }
 
 func (p *Plugin) executeQueueHelpCommand(c *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
-	helpTitle := `###### Defer Post - Slash Command help
+	helpTitle := `###### Messages Queue - Slash Command help
 `
 	commandHelp := `* |/messages-queue create <name> <schedule>| - Create a queue for the current channel (see the Schedule format help at the bottom)
 * |/messages-queue list| - List the queues for this channel
