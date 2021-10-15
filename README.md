@@ -8,8 +8,8 @@ The `/defer-post` commands that allows to defer the delivery of a message for ce
 
 ### Available commands
 
-  * |/defer-post [time] [message]| - Send the message after the time has passed
-  * |/defer-post online [message]| - Send the message when the user is online (only valid for DMs)
+  * `/defer-post [time] [message]` - Send the message after the time has passed
+  * `/defer-post online [message]` - Send the message when the user is online (only valid for DMs)
 
 ### Defer time format
 
@@ -38,13 +38,13 @@ When the queue is empty, no messsage is sent.
 
 ### Available commands
 
-  * |/messages-queue create <name> <schedule>| - Create a queue for the current channel (see the Schedule format help at the bottom)
-  * |/messages-queue list| - List the queues for this channel
-  * |/messages-queue delete <queue-name>| - Delete a queue.
-  * |/messages-queue add-message <queue-name> <message>| - Add a new message to the queue
-  * |/messages-queue list-messages <queue-name>| - Add a new message the the queue
-  * |/messages-queue remove-message <queue-name> <position>| - Remove a message from the queue in the specified position
-  * |/messages-queue insert-message <queue-name> <position> <message>| - Add a new message to the queue in the speicified position
+  * `/messages-queue create <name> <schedule>` - Create a queue for the current channel (see the Schedule format help at the bottom)
+  * `/messages-queue list` - List the queues for this channel
+  * `/messages-queue delete <queue-name>` - Delete a queue.
+  * `/messages-queue add-message <queue-name> <message>` - Add a new message to the queue
+  * `/messages-queue list-messages <queue-name>` - Add a new message the the queue
+  * `/messages-queue remove-message <queue-name> <position>` - Remove a message from the queue in the specified position
+  * `/messages-queue insert-message <queue-name> <position> <message>` - Add a new message to the queue in the speicified position
 
 ### Schedule format
 
