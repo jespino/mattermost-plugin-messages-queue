@@ -48,9 +48,9 @@ When the queue is empty, no messsage is sent.
 
 ### Schedule format
 
-The schedule format used is the cron expresion format, you can see more information [here](https://en.wikipedia.org/wiki/Cron)`
+The schedule format used is the cron expresion format, you can see more information [here](https://en.wikipedia.org/wiki/Cron).
 
-### Examples
+### Example
 
   * If you want to prepare a set of tips to send them from monday to friday at 10 am to your users you can run:
     * `/message-queue create tips 0 10 * * 1-5`
