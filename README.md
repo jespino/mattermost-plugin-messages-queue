@@ -1,6 +1,6 @@
 # Mattermost Message Queue
 
-This plugin adds async messages delivery based on time or online status of the users throuh `/defer-post` and `/messages-queue` slash commands.
+This plugin adds async messages delivery based on time or online status of the users through `/defer-post` and `/messages-queue` slash commands.
 
 ## `/defer-post`
 
@@ -17,17 +17,17 @@ The time can be specified in the golang format that you can see [here](https://g
 
 ### Examples
 
-  * In a DM you can run `/defer-post online please take a lot to this ticket
+  * In a DM you can run `/defer-post online please take a look at this ticket
     #123`. That will send the message to the user whenever the user is online
-    again, so you don't have to worry about annoy him while he is offline (no
+    again, so you don't have to worry about annoying him while he is offline (no
     message, and no notifications).
-  * In a any channel you can run `/defer-post 2h Starting the deployment`. This
-    will schedule the message to be send in 2 hours.
+  * In any channel you can run `/defer-post 2h Starting the deployment`. This
+    will schedule the message to be sent in 2 hours.
 
 ## `/messages-queue`
 
 The `/messages-queue` commands allows you to create and maintain messages
-queues that are send base on a schedule.
+queues that are sent based on a schedule.
 
 You can list, add and delete queues, and the messages in it. Every time the
 scheduled message queue is triggered, it sends one message from the queue. So
@@ -42,13 +42,13 @@ When the queue is empty, no messsage is sent.
   * `/messages-queue list` - List the queues for this channel
   * `/messages-queue delete <queue-name>` - Delete a queue.
   * `/messages-queue add-message <queue-name> <message>` - Add a new message to the queue
-  * `/messages-queue list-messages <queue-name>` - Add a new message the the queue
+  * `/messages-queue list-messages <queue-name>` - Add a new message to the queue
   * `/messages-queue remove-message <queue-name> <position>` - Remove a message from the queue in the specified position
-  * `/messages-queue insert-message <queue-name> <position> <message>` - Add a new message to the queue in the speicified position
+  * `/messages-queue insert-message <queue-name> <position> <message>` - Add a new message to the queue in the specified position
 
 ### Schedule format
 
-The schedule format used is the cron expresion format, you can see more information [here](https://en.wikipedia.org/wiki/Cron).
+The schedule format used is the cron expression format, you can see more information [here](https://en.wikipedia.org/wiki/Cron).
 
 ### Example
 

@@ -45,7 +45,6 @@ type Plugin struct {
 // ServeHTTP demonstrates a plugin that handles HTTP requests by greeting the world.
 func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("Mattermost-User-ID")
-	fmt.Println(p.postsWaitingForOnline[userID])
 	if posts, ok := p.postsWaitingForOnline[userID]; ok && posts != nil {
 		for _, post := range posts {
 			p.API.CreatePost(post)
@@ -58,15 +57,15 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Req
 func (p *Plugin) OnActivate() error {
 	err := p.RestoreWaitingForOnlinePosts()
 	if err != nil {
-		p.API.LogError(err.Error())
+		p.API.LogError("failed to restore \"waiting for online\" posts", "err", err.Error())
 	}
 	err = p.RestoreDeferedPosts()
 	if err != nil {
-		p.API.LogError(err.Error())
+		p.API.LogError("failed to restore \"deferred\" posts", "err", err.Error())
 	}
 	err = p.RestoreQueues()
 	if err != nil {
-		p.API.LogError(err.Error())
+		p.API.LogError("failed to restore \"queues\"", "err", err.Error())
 	}
 	if err := p.API.RegisterCommand(createDeferCommand()); err != nil {
 		return err
@@ -100,7 +99,7 @@ func (p *Plugin) RestoreQueues() error {
 	for _, queue := range p.Queues {
 		scheduleSpec, nErr := cronexpr.Parse(queue.SpecSource)
 		if nErr != nil {
-			p.API.LogError(nErr.Error())
+			p.API.LogError("failed to parse \"queue schedule\" info", "err", nErr.Error())
 		}
 		queue.Spec = scheduleSpec
 
@@ -113,12 +112,12 @@ func (p *Plugin) RestoreQueues() error {
 					Message:   queue.Messages[0],
 				})
 				if err != nil {
-					p.API.LogError(err.Error())
+					p.API.LogError("failed to send scheduled post", "err", err.Error())
 				}
 				queue.Messages = queue.Messages[1:]
 				nErr := p.SaveQueues()
 				if nErr != nil {
-					p.API.LogError(nErr.Error())
+					p.API.LogError("failed to save \"queues\"", "err", err.Error())
 				}
 			}
 			model.CreateTask(fmt.Sprintf("check queue %s", queue.Name), handleTimeout, queue.Spec.Next(time.Now()).Sub(time.Now()))
