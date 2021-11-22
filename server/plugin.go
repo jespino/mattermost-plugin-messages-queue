@@ -21,7 +21,7 @@ type Queue struct {
 	Messages   []string             `json:"messages"`
 }
 
-type DeferedPost struct {
+type DeferredPost struct {
 	Time time.Time   `json:"time"`
 	Post *model.Post `json:"post"`
 }
@@ -38,7 +38,7 @@ type Plugin struct {
 	configuration *configuration
 
 	postsWaitingForOnline map[string][]*model.Post
-	deferedPosts          []*DeferedPost
+	deferredPosts         []*DeferredPost
 	Queues                map[string]*Queue
 }
 
@@ -59,7 +59,7 @@ func (p *Plugin) OnActivate() error {
 	if err != nil {
 		p.API.LogError("failed to restore \"waiting for online\" posts", "err", err.Error())
 	}
-	err = p.RestoreDeferedPosts()
+	err = p.RestoreDeferredPosts()
 	if err != nil {
 		p.API.LogError("failed to restore \"deferred\" posts", "err", err.Error())
 	}
@@ -128,40 +128,40 @@ func (p *Plugin) RestoreQueues() error {
 	return nil
 }
 
-func (p *Plugin) SaveDeferedPosts() error {
-	data, err := json.Marshal(p.deferedPosts)
+func (p *Plugin) SaveDeferredPosts() error {
+	data, err := json.Marshal(p.deferredPosts)
 	if err != nil {
 		return err
 	}
-	p.API.KVSet("defered-posts", data)
+	p.API.KVSet("deferred-posts", data)
 	return nil
 }
 
-func (p *Plugin) RestoreDeferedPosts() error {
-	p.deferedPosts = []*DeferedPost{}
-	data, appErr := p.API.KVGet("defered-posts")
+func (p *Plugin) RestoreDeferredPosts() error {
+	p.deferredPosts = []*DeferredPost{}
+	data, appErr := p.API.KVGet("deferred-posts")
 	if appErr != nil {
 		return appErr
 	}
-	err := json.Unmarshal(data, &p.deferedPosts)
+	err := json.Unmarshal(data, &p.deferredPosts)
 	if err != nil {
-		p.deferedPosts = []*DeferedPost{}
+		p.deferredPosts = []*DeferredPost{}
 		return err
 	}
-	finalDeferedPosts := []*DeferedPost{}
-	for _, deferedPost := range p.deferedPosts {
-		if deferedPost.Time.Before(time.Now()) {
-			_, err := p.API.CreatePost(deferedPost.Post)
+	finalDeferredPosts := []*DeferredPost{}
+	for _, deferredPost := range p.deferredPosts {
+		if deferredPost.Time.Before(time.Now()) {
+			_, err := p.API.CreatePost(deferredPost.Post)
 			if err != nil {
 				p.API.LogError(err.Error())
 			}
 
 		} else {
-			finalDeferedPosts = append(finalDeferedPosts, deferedPost)
+			finalDeferredPosts = append(finalDeferredPosts, deferredPost)
 		}
 	}
-	p.deferedPosts = finalDeferedPosts
-	p.SaveDeferedPosts()
+	p.deferredPosts = finalDeferredPosts
+	p.SaveDeferredPosts()
 	return nil
 }
 
@@ -182,7 +182,7 @@ func (p *Plugin) RestoreWaitingForOnlinePosts() error {
 	}
 	err := json.Unmarshal(data, &p.postsWaitingForOnline)
 	if err != nil {
-		p.deferedPosts = []*DeferedPost{}
+		p.deferredPosts = []*DeferredPost{}
 		return err
 	}
 	return nil

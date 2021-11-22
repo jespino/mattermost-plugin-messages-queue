@@ -70,7 +70,7 @@ func getQueueAutocompleteData() *model.AutocompleteData {
 
 	insert := model.NewAutocompleteData("insert-message", "[queue-name] [position] [message]", "Insert a message in a position in the queue")
 	insert.AddTextArgument("Name of the new queue", "[queue-name]", "")
-	remove.AddTextArgument("Position of the message", "[position]", "")
+	insert.AddTextArgument("Position of the message", "[position]", "")
 	insert.AddTextArgument("Message to insert in the queue", "[message]", "")
 	queue.AddCommand(insert)
 
@@ -192,7 +192,7 @@ func (p *Plugin) executeQueueCommand(c *plugin.Context, args *model.CommandArgs)
 
 		queuesList := []string{}
 		for _, queue := range p.Queues {
-			nextMessage := "not messages in the queue"
+			nextMessage := "no messages in the queue"
 			if len(queue.Messages) > 0 {
 				nextMessage = queue.Messages[0]
 			}
@@ -224,7 +224,7 @@ func (p *Plugin) executeQueueCommand(c *plugin.Context, args *model.CommandArgs)
 		if len(p.Queues) == 0 {
 			_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
 				ChannelId: args.ChannelId,
-				Message:   fmt.Sprintf("Queue %s doesn't exists", split[2]),
+				Message:   fmt.Sprintf("Queue %s doesn't exist", split[2]),
 			})
 			return &model.CommandResponse{}, nil
 		}
@@ -233,7 +233,7 @@ func (p *Plugin) executeQueueCommand(c *plugin.Context, args *model.CommandArgs)
 		if !ok {
 			_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
 				ChannelId: args.ChannelId,
-				Message:   fmt.Sprintf("Queue %s doesn't exists", split[2]),
+				Message:   fmt.Sprintf("Queue %s doesn't exist", split[2]),
 			})
 			return &model.CommandResponse{}, nil
 		}
@@ -384,6 +384,10 @@ func (p *Plugin) executeQueueCommand(c *plugin.Context, args *model.CommandArgs)
 		})
 		return &model.CommandResponse{}, nil
 	}
+	_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+		ChannelId: args.ChannelId,
+		Message:   "Unknown command, please use /" + queueCommand + " help for more information.",
+	})
 	return &model.CommandResponse{}, nil
 }
 
@@ -396,13 +400,10 @@ func (p *Plugin) executeDeferCommand(c *plugin.Context, args *model.CommandArgs)
 		}
 
 		return &model.CommandResponse{
-				ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
-				ChannelId:    args.ChannelId,
-				Text:         "Not enough parameters",
-			}, &model.AppError{
-				Message:       "Not enough parameters",
-				DetailedError: "Not enough parameters",
-			}
+			ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
+			ChannelId:    args.ChannelId,
+			Text:         "Not enough parameters",
+		}, nil
 	}
 
 	timeSpec = split[1]
@@ -432,6 +433,7 @@ func (p *Plugin) executeDeferCommand(c *plugin.Context, args *model.CommandArgs)
 				ChannelId: args.ChannelId,
 				Message:   "Unable to defer the message until the user is online",
 			})
+			p.API.LogError("unable to get channel members of the channel", "err", appErr.Error())
 			return &model.CommandResponse{}, nil
 		}
 
@@ -442,8 +444,6 @@ func (p *Plugin) executeDeferCommand(c *plugin.Context, args *model.CommandArgs)
 			}
 		}
 
-		fmt.Println("------ ON ADD NEW ------")
-		fmt.Println(p.postsWaitingForOnline)
 		p.postsWaitingForOnline[otherUserId] = append(p.postsWaitingForOnline[otherUserId], &model.Post{
 			UserId:    args.UserId,
 			ChannelId: args.ChannelId,
@@ -452,11 +452,10 @@ func (p *Plugin) executeDeferCommand(c *plugin.Context, args *model.CommandArgs)
 			Message:   message,
 		})
 		p.SaveWaitingForOnlinePosts()
-		fmt.Println(p.postsWaitingForOnline)
 		return &model.CommandResponse{
 			ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
 			ChannelId:    args.ChannelId,
-			Text:         "Message defered",
+			Text:         "Message deferred",
 		}, nil
 	}
 
@@ -472,17 +471,17 @@ func (p *Plugin) executeDeferCommand(c *plugin.Context, args *model.CommandArgs)
 			}
 	}
 
-	deferedPost := model.Post{
+	deferredPost := model.Post{
 		UserId:    args.UserId,
 		ChannelId: args.ChannelId,
 		RootId:    args.RootId,
 		ParentId:  args.ParentId,
 		Message:   message,
 	}
-	p.deferedPosts = append(p.deferedPosts, &DeferedPost{Time: time.Now().Add(duration), Post: &deferedPost})
-	p.SaveDeferedPosts()
+	p.deferredPosts = append(p.deferredPosts, &DeferredPost{Time: time.Now().Add(duration), Post: &deferredPost})
+	p.SaveDeferredPosts()
 	model.CreateTask("defer message", func() {
-		_, err := p.API.CreatePost(&deferedPost)
+		_, err := p.API.CreatePost(&deferredPost)
 		if err != nil {
 			p.API.LogError(err.Error())
 		}
@@ -491,7 +490,7 @@ func (p *Plugin) executeDeferCommand(c *plugin.Context, args *model.CommandArgs)
 	return &model.CommandResponse{
 		ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
 		ChannelId:    args.ChannelId,
-		Text:         "Message defered",
+		Text:         "Message deferred",
 	}, nil
 }
 
@@ -523,11 +522,14 @@ func (p *Plugin) executeQueueHelpCommand(c *plugin.Context, args *model.CommandA
 * |/messages-queue add-message <queue-name> <message>| - Add a new message to the queue
 * |/messages-queue list-messages <queue-name>| - Add a new message the the queue
 * |/messages-queue remove-message <queue-name> <position>| - Remove a message from the queue in the specified position
-* |/messages-queue insert-message <queue-name> <position> <message>| - Add a new message to the queue in the speicified position
+* |/messages-queue insert-message <queue-name> <position> <message>| - Add a new message to the queue in the specified position
 * |/messages-queue help| - Show this help text
 
 ###### Schedule format:
-* The schedule format used is the cron expresion format, you can see more information [here](https://en.wikipedia.org/wiki/Cron)`
+* The schedule format used is the cron expresion format, you can see more information [here](https://en.wikipedia.org/wiki/Cron)
+
+###### Queue names:
+* The queue names must can be anything without spaces in it`
 	text := helpTitle + strings.Replace(commandHelp, "|", "`", -1)
 	post := &model.Post{
 		ChannelId: args.ChannelId,
